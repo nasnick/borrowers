@@ -1,0 +1,87 @@
+import Ember from 'ember';
+import Base from 'ember-simple-auth/authenticators/base';
+import config from '../config/environment';
+
+export default Base.extend({
+  store: Ember.inject.service(),
+
+  restore(properties) {
+    let self = this;
+    return new Ember.RSVP.Promise(function(resolve, reject){
+      Ember.$.ajax({
+          url: properties.account.links.self,
+          headers: {
+            "Authorization": properties.header
+          }
+        }).fail(function(xhr, textStatus, errorThrown){
+          reject();
+        }).done(function(data){
+          self.get('store').pushPayload(data);
+          self.get('store').find('customer',data.data.id);
+          Ember.Logger.debug('data id' + data.data.id);
+          Ember.Logger.debug('data id find' + self.get('store').find('customer',data.data.id));
+          resolve(properties);
+        });
+    });
+  },
+  authenticate(identification, password) {
+    let self = this;
+    return new Ember.RSVP.Promise(function(resolve, reject){
+      Ember.Logger.debug('authenticate called ' + identification + ' ' + password);
+      let authHeader = "Basic " + btoa(identification + ":" + password);
+      // get the customer first
+      // /api/v1/customer/customer?email=
+      Ember.$.ajax({
+        url: `${config.DS.host}/api/v1/customer/customer?email=${identification}`,
+        headers: {
+          "Authorization": authHeader
+        }
+      }).fail(function(xhr, textStatus, errorThrown){
+        alert(errorThrown + " : Email or password is wrong. Please try again." );
+      }).done(function(data){
+        // get the link out first as it is removed when you pushPayload
+        let account_link = data.data.links.account.self;
+        // the customer model
+        var customer = self.get('store').pushPayload(data);
+        // then verify the account
+        Ember.$.ajax({
+          url: account_link,
+          headers: {
+            "Authorization": authHeader
+          }
+        }).fail(function(xhr, textStatus, errorThrown){
+          reject();
+        }).done(function(data){
+          // get the data out first as it is removed when you pushPayload
+          var auth = {
+            header: authHeader,
+            account: data.data
+          };
+          self.get('store').pushPayload(data);
+          resolve(auth);
+        }).then(function(response){
+          Ember.run(resolve);
+        }, function(xhr, status, error){
+          Ember.run(reject);
+        });
+      });
+    });
+  },
+  invalidate(options) {
+    return new Ember.RSVP.Promise(function(resolve, reject){
+      Ember.$.ajax({
+        url: `${config.DS.host}/api/v1/customer/logout/${options.account.id}`,
+        success : function(datas){
+          resolve();
+        },
+        headers: {
+          "Authorization": options.header
+        }
+      }).then(function(response){
+        Ember.run(resolve);
+      }, function(xhr, status, error){
+        Ember.run(reject);
+      });
+    });
+  }
+});
