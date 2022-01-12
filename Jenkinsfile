@@ -1,10 +1,16 @@
 pipeline {
-    agent { label 'master' }
-    stages {
-        stage('build') {
-            steps {
-                echo "Hello World!"
-            }
-        }
+  agent {
+    node {
+      label 'nick'
     }
+
+  }
+  stages {
+    stage('build') {
+      steps {
+        echo 'Hello World!'
+      }
+    }
+
+  }
 }
